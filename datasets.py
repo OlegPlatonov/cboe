@@ -35,17 +35,11 @@ class TextDataset(Dataset):
         return array_2d
 
     @staticmethod
-    def get_attention_mask(lengths):
-        batch_size = len(lengths)
-        max_length = max(lengths)
-        attn_mask = torch.zeros(batch_size, max_length, max_length)
-        for i, length in enumerate(lengths):
-            attn_mask[i] = torch.eye(max_length)
-            attn_mask[i, :length, :length] = torch.tril(torch.ones(length, length))
-
+    def get_attention_mask(length):
+        attn_mask = torch.tril(torch.ones(length, length))
         attn_mask = 1 - attn_mask
         attn_mask[attn_mask == 1] = - torch.inf
-        attn_mask = attn_mask.unsqueeze(1)
+        attn_mask = attn_mask.unsqueeze(0).unsqueeze(1)
 
         return attn_mask
 
@@ -57,14 +51,12 @@ class TextDataset(Dataset):
             inputs.append(cur_inputs)
             targets.append(cur_targets)
 
-        lengths = [len(cur_inputs) for cur_inputs in inputs]
-
         inputs = TextDataset.pad_2d(inputs, pad_value=TextDataset.pad_token_id)
         targets = TextDataset.pad_2d(targets, pad_value=TextDataset.pad_token_id)
 
         inputs = torch.tensor(inputs)
         targets = torch.tensor(targets)
 
-        attn_mask = TextDataset.get_attention_mask(lengths)
+        attn_mask = TextDataset.get_attention_mask(inputs.shape[1])
 
         return inputs, attn_mask, targets
