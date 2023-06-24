@@ -1,5 +1,6 @@
 import torch
 from torch import nn
+from torch.nn import functional as F
 
 
 class FeedForwardModule(nn.Module):
@@ -38,7 +39,7 @@ class AttentionModule(nn.Module):
         self.output_linear = nn.Linear(in_features=dim, out_features=dim)
         self.dropout = nn.Dropout(p=dropout)
 
-    def forward(self, x, attn_mask):
+    def forward(self, x):
         batch_size, length, dim = x.shape
 
         queries = self.query_linear(x)
@@ -53,17 +54,9 @@ class AttentionModule(nn.Module):
         keys = keys.transpose(1, 2)
         values = values.transpose(1, 2)
 
-        attn_scores = self.scale * (queries @ keys.mT)
-        attn_scores += attn_mask
+        x = F.scaled_dot_product_attention(query=queries, key=keys, value=values, is_causal=True,
+                                           dropout_p=self.attn_dropout)
 
-        if self.attn_dropout > 0:
-            dropout_probs = self.attn_dropout * torch.ones_like(attn_scores)
-            dropout_mask = torch.bernoulli(dropout_probs).to(bool)
-            attn_scores[dropout_mask] = - torch.inf
-
-        attn_probs = torch.softmax(attn_scores, dim=-1)
-
-        x = attn_probs @ values
         x = x.transpose(1, 2)
         x = x.reshape(batch_size, length, dim)
 
@@ -83,8 +76,8 @@ class TransformerModule(nn.Module):
         self.layernorm_2 = nn.LayerNorm(dim)
         self.feedforward_module = FeedForwardModule(dim=dim, dim_multiplier=dim_multiplier, dropout=dropout)
 
-    def forward(self, x, attn_mask):
-        x = x + self.attention_module(self.layernorm_1(x), attn_mask)
+    def forward(self, x):
+        x = x + self.attention_module(self.layernorm_1(x))
         x = x + self.feedforward_module(self.layernorm_2(x))
 
         return x
@@ -108,14 +101,14 @@ class Model(nn.Module):
         self.output_layernorm = nn.LayerNorm(hidden_dim)
         self.output_linear = nn.Linear(in_features=hidden_dim, out_features=num_token_embeddings, bias=False)
 
-    def forward(self, inputs, attn_mask):
+    def forward(self, inputs):
         device = inputs.device
 
         x = self.token_embeddings(inputs)
         x += self.pos_embeddings(torch.arange(x.shape[1], device=device))[None, ...]
 
         for transformer_module in self.transformer_modules:
-            x = transformer_module(x=x, attn_mask=attn_mask)
+            x = transformer_module(x=x)
 
         x = self.output_layernorm(x)
         logits = self.output_linear(x)

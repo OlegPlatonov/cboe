@@ -60,11 +60,11 @@ def train_epoch(model, data_loader, optimizer, scaler, scheduler, tb_writer, epo
     optimizer.zero_grad(set_to_none=True)
     num_samples = len(data_loader) * data_loader.batch_size
     with tqdm(total=num_samples, desc=f'Epoch {epoch}') as progress_bar:
-        for i, (inputs, attn_mask, targets) in enumerate(data_loader, start=1):
-            inputs, attn_mask, targets = inputs.to(device), attn_mask.to(device), targets.to(device)
+        for i, (inputs, targets) in enumerate(data_loader, start=1):
+            inputs, targets = inputs.to(device), targets.to(device)
 
             with autocast(enabled=amp):
-                logits = model(inputs=inputs, attn_mask=attn_mask)
+                logits = model(inputs=inputs)
                 loss = F.cross_entropy(input=logits.transpose(1, 2), target=targets,
                                        ignore_index=data_loader.dataset.pad_token_id)
                 loss /= num_accumulation_steps
@@ -97,11 +97,11 @@ def evaluate(model, data_loader, tb_writer, num_processed_samples, device, amp=F
     model.eval()
     loss_sum = 0
     num_tokens = 0
-    for inputs, attn_mask, targets, y in data_loader:
-        inputs, attn_mask, targets = inputs.to(device), attn_mask.to(device), targets.to(device)
+    for inputs, targets, y in data_loader:
+        inputs, targets = inputs.to(device), targets.to(device)
 
         with autocast(enabled=amp):
-            logits = model(inputs=inputs, attn_mask=attn_mask)
+            logits = model(inputs=inputs)
             loss_sum += F.cross_entropy(input=logits.transpose(1, 2), target=targets,
                                         ignore_index=data_loader.dataset.pad_token_id, reduction='sum').item()
             num_tokens += (targets != data_loader.dataset.pad_token_id).sum().item()

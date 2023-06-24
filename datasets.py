@@ -35,15 +35,6 @@ class TextDataset(Dataset):
         return array_2d
 
     @staticmethod
-    def get_attention_mask(length):
-        attn_mask = torch.tril(torch.ones(length, length))
-        attn_mask = 1 - attn_mask
-        attn_mask[attn_mask == 1] = - torch.inf
-        attn_mask = attn_mask.unsqueeze(0).unsqueeze(1)
-
-        return attn_mask
-
-    @staticmethod
     def collate_fn(batch):
         inputs = []
         targets = []
@@ -57,6 +48,4 @@ class TextDataset(Dataset):
         inputs = torch.tensor(inputs)
         targets = torch.tensor(targets)
 
-        attn_mask = TextDataset.get_attention_mask(inputs.shape[1])
-
-        return inputs, attn_mask, targets
+        return inputs, targets
