@@ -10,7 +10,7 @@ from torch.utils.data import DataLoader
 from torch.cuda.amp import autocast, GradScaler
 from torch.utils.tensorboard import SummaryWriter
 
-from model import Model
+from models import Transformer, CBoETransformer
 from datasets import TextDataset
 from utils import Logger, get_save_dir, get_parameter_groups, get_lr_scheduler
 
@@ -29,6 +29,10 @@ def get_args():
     parser.add_argument('--hidden_dim_multiplier', type=float, default=4)
     parser.add_argument('--pretrained_model', type=str, default=None)
     parser.add_argument('--save_model', default=False, action='store_true')
+
+    # CBoE
+    parser.add_argument('--cboe', default=False, action='store_true')
+    parser.add_argument('--cboe_every_layers', type=int, default=4)
 
     # regularization
     parser.add_argument('--dropout', type=float, default=0)
@@ -55,7 +59,6 @@ def get_args():
 
 def train_epoch(model, data_loader, optimizer, scaler, scheduler, tb_writer, epoch, step, num_processed_samples, device,
                 amp=False, num_accumulation_steps=1):
-
     model.train()
     optimizer.zero_grad(set_to_none=True)
     num_samples = len(data_loader) * data_loader.batch_size
@@ -140,14 +143,25 @@ def main():
     num_steps = len(train_loader) // args.num_accumulation_steps * args.num_epochs
 
     print('Creating model...')
-    model = Model(num_layers=args.num_layers,
-                  hidden_dim=args.hidden_dim,
-                  num_heads=args.num_heads,
-                  hidden_dim_multiplier=args.hidden_dim_multiplier,
-                  num_token_embeddings=train_dataset.tokenizer.vocab_size,
-                  num_pos_embeddings=512,
-                  dropout=args.dropout,
-                  attn_dropout=args.attn_dropout)
+    if args.cboe:
+        model = CBoETransformer(num_layers=args.num_layers,
+                                cboe_every_layers=args.cboe_every_layers,
+                                hidden_dim=args.hidden_dim,
+                                num_heads=args.num_heads,
+                                hidden_dim_multiplier=args.hidden_dim_multiplier,
+                                num_token_embeddings=train_dataset.tokenizer.vocab_size,
+                                num_pos_embeddings=512,
+                                dropout=args.dropout,
+                                attn_dropout=args.attn_dropout)
+    else:
+        model = Transformer(num_layers=args.num_layers,
+                            hidden_dim=args.hidden_dim,
+                            num_heads=args.num_heads,
+                            hidden_dim_multiplier=args.hidden_dim_multiplier,
+                            num_token_embeddings=train_dataset.tokenizer.vocab_size,
+                            num_pos_embeddings=512,
+                            dropout=args.dropout,
+                            attn_dropout=args.attn_dropout)
 
     if args.pretrained_model is not None:
         state_dict = torch.load(args.pretrained_model)

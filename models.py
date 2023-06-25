@@ -83,7 +83,19 @@ class TransformerModule(nn.Module):
         return x
 
 
-class Model(nn.Module):
+class CBoEModule(nn.Module):
+    def __init__(self):
+        super().__init__()
+
+    def forward(self, x, embeddings):
+        cboe_scores = x @ embeddings.T
+        cboe_probs = torch.softmax(cboe_scores, dim=-1)
+        x = cboe_probs @ embeddings
+
+        return x
+
+
+class Transformer(nn.Module):
     def __init__(self, num_layers, hidden_dim, num_heads, hidden_dim_multiplier, num_token_embeddings,
                  num_pos_embeddings, dropout, attn_dropout):
 
@@ -109,6 +121,45 @@ class Model(nn.Module):
 
         for transformer_module in self.transformer_modules:
             x = transformer_module(x=x)
+
+        x = self.output_layernorm(x)
+        logits = self.output_linear(x)
+
+        return logits
+
+
+class CBoETransformer(nn.Module):
+    def __init__(self, num_layers, cboe_every_layers, hidden_dim, num_heads, hidden_dim_multiplier, num_token_embeddings,
+                 num_pos_embeddings, dropout, attn_dropout):
+
+        super().__init__()
+
+        self.cboe_every_layers = cboe_every_layers
+
+        self.token_embeddings = nn.Embedding(num_embeddings=num_token_embeddings, embedding_dim=hidden_dim)
+        self.pos_embeddings = nn.Embedding(num_embeddings=num_pos_embeddings, embedding_dim=hidden_dim)
+
+        self.transformer_modules = nn.ModuleList(
+            TransformerModule(dim=hidden_dim, num_heads=num_heads, dim_multiplier=hidden_dim_multiplier,
+                              dropout=dropout, attn_dropout=attn_dropout)
+            for _ in range(num_layers)
+        )
+
+        self.cboe_modules = nn.ModuleList(CBoEModule() for _ in range((num_layers - 1) // cboe_every_layers))
+
+        self.output_layernorm = nn.LayerNorm(hidden_dim)
+        self.output_linear = nn.Linear(in_features=hidden_dim, out_features=num_token_embeddings, bias=False)
+
+    def forward(self, inputs):
+        device = inputs.device
+
+        x = self.token_embeddings(inputs)
+        x += self.pos_embeddings(torch.arange(x.shape[1], device=device))[None, ...]
+
+        for i in range(len(self.transformer_modules)):
+            x = self.transformer_modules[i](x)
+            if (i + 1) % self.cboe_every_layers == 0 and i + 1 < len(self.transformer_modules):
+                x = self.cboe_modules[i // self.cboe_every_layers](x, embeddings=self.token_embeddings.weight)
 
         x = self.output_layernorm(x)
         logits = self.output_linear(x)
