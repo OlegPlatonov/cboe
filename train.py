@@ -100,7 +100,7 @@ def evaluate(model, data_loader, tb_writer, num_processed_samples, device, amp=F
     model.eval()
     loss_sum = 0
     num_tokens = 0
-    for inputs, targets, y in data_loader:
+    for inputs, targets in data_loader:
         inputs, targets = inputs.to(device), targets.to(device)
 
         with autocast(enabled=amp):
@@ -180,7 +180,7 @@ def main():
                                  warmup_proportion=args.warmup_proportion)
 
     print('Starting training...')
-    best_val_metric = None
+    best_perplexity = None
     best_epoch = None
     step = 1
     num_processed_samples = 0
@@ -191,20 +191,20 @@ def main():
                                                   device=args.device, amp=args.amp,
                                                   num_accumulation_steps=args.num_accumulation_steps)
 
-        val_metric = evaluate(model=model, data_loader=val_loader, tb_writer=tb_writer,
+        perplexity = evaluate(model=model, data_loader=val_loader, tb_writer=tb_writer,
                               num_processed_samples=num_processed_samples, device=args.device, amp=args.amp)
 
         print()
 
-        logger.update_metrics(val_metric=val_metric, epoch=epoch)
+        logger.update_metrics(val_metric=perplexity, epoch=epoch)
 
-        if best_val_metric is None or val_metric < best_val_metric:
-            best_val_metric = val_metric
+        if best_perplexity is None or perplexity < best_perplexity:
+            best_perplexity = perplexity
             best_epoch = epoch
             if args.save_model:
                 torch.save(model.state_dict(), os.path.join(save_dir, 'model.pt'))
 
-    print(f'Best val perplexity: {best_val_metric} (achieved after epoch {best_epoch})')
+    print(f'Best val perplexity: {best_perplexity} (achieved after epoch {best_epoch})')
     print()
 
 
