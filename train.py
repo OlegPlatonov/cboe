@@ -15,7 +15,7 @@ from torch.utils.tensorboard import SummaryWriter
 from torch.nn.modules.utils import consume_prefix_in_state_dict_if_present
 
 from models import Transformer, CBoETransformer
-from datasets import TextDataset
+from dataset import TextDataset
 from utils import Logger, get_save_dir, get_parameter_groups, get_lr_scheduler
 
 
@@ -151,8 +151,8 @@ def main():
     if rank == 0:
         print('Preparing data...')
 
-    train_dataset = TextDataset(os.path.join('data', f'{args.dataset}_train.txt'))
-    val_dataset = TextDataset(os.path.join('data', f'{args.dataset}_val.txt'))
+    train_dataset = TextDataset(os.path.join('data', f'{args.dataset}_train.txt.gz'))
+    val_dataset = TextDataset(os.path.join('data', f'{args.dataset}_val.txt.gz'))
     train_sampler = DistributedSampler(dataset=train_dataset, num_replicas=world_size, rank=rank, shuffle=True,
                                        drop_last=True)
     train_loader = DataLoader(dataset=train_dataset, sampler=train_sampler, batch_size=args.batch_size,

@@ -1,3 +1,4 @@
+import gzip
 import torch
 from torch.utils.data import Dataset
 from transformers import RobertaTokenizer
@@ -10,7 +11,7 @@ class TextDataset(Dataset):
     pad_token_id = tokenizer.convert_tokens_to_ids(['<pad>'])[0]
 
     def __init__(self, file_path):
-        with open(file_path) as file:
+        with gzip.open(file_path, 'rt') as file:
             texts = [line.strip() for line in file]
 
         self.texts = texts
